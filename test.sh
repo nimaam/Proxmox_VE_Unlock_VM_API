@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# Exmaple:
+# ./test.sh 1.2.3.4 root@pam YOUR-PASSWORD pve-name 144
 set -e
 
 HOST="$1"
