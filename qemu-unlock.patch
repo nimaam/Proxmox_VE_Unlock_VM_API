@@ -1,0 +1,45 @@
+--- a/PVE/API2/Qemu.pm
++++ b/PVE/API2/Qemu.pm
+@@ -3314,6 +3314,7 @@
+     { subdir => 'start' },
+     { subdir => 'stop' },
+     { subdir => 'reboot' },
++    { subdir => 'unlock' },
+
+@@ -3931,6 +3932,35 @@
+     return $rpcenv->fork_worker('qmreboot', $vmid, $authuser, $realcmd);
+ }});
+
++__PACKAGE__->register_method({
++    name => 'vm_unlock',
++    path => '{vmid}/status/unlock',
++    method => 'POST',
++    description => "Unlock the VM.",
++    permissions => {
++        check => ['perm', '/vms/{vmid}', ['VM.Config.Disk']],
++    },
++    parameters => {
++        additionalProperties => 0,
++        properties => {
++            node => get_standard_option('pve-node'),
++            vmid => get_standard_option('pve-vmid'),
++        },
++    },
++    returns => {
++        type => 'string',
++    },
++    code => sub {
++        my ($param) = @_;
++
++        my $vmid = $param->{vmid};
++
++        my $rpcenv = PVE::RPCEnvironment::get();
++        my $authuser = $rpcenv->get_user();
++
++        my $realcmd = sub {
++            syslog('info', "unlock VM $vmid");
++            PVE::QemuServer::unlock_vm($vmid);
++        };
++
++        return $rpcenv->fork_worker('qmunlock', $vmid, $authuser, $realcmd);
++    }});

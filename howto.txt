@@ -1,0 +1,31 @@
+HOW TO APPLY UNLOCK API PATCH
+
+1. Copy files to Proxmox host:
+   - qemu-unlock.patch
+   - apply_patch.sh
+
+2. Make script executable:
+   chmod +x apply_patch.sh
+
+3. Run patch script:
+   ./apply_patch.sh
+
+4. Restart Proxmox services:
+   systemctl restart pvedaemon
+   systemctl restart pveproxy
+
+5. Test endpoint:
+
+CLI:
+   pvesh create /nodes/<node>/qemu/<vmid>/status/unlock
+
+API:
+   POST /api2/json/nodes/<node>/qemu/<vmid>/status/unlock
+
+---
+
+ROLLBACK
+
+If needed:
+   cp Qemu.pm.backup /usr/share/perl5/PVE/API2/Qemu.pm
+   systemctl restart pvedaemon pveproxy
