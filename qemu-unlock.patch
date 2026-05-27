@@ -14,6 +14,8 @@
 +    name => 'vm_unlock',
 +    path => '{vmid}/status/unlock',
 +    method => 'POST',
++    protected => 1,
++    proxyto => 'node',
 +    description => "Unlock the VM.",
 +    permissions => {
 +        check => ['perm', '/vms/{vmid}', ['VM.Config.Disk']],
@@ -26,20 +28,20 @@
 +        },
 +    },
 +    returns => {
-+        type => 'string',
++        type => 'null',
 +    },
 +    code => sub {
 +        my ($param) = @_;
 +
 +        my $vmid = $param->{vmid};
 +
-+        my $rpcenv = PVE::RPCEnvironment::get();
-+        my $authuser = $rpcenv->get_user();
++        syslog('info', "unlock VM $vmid");
 +
-+        my $realcmd = sub {
-+            syslog('info', "unlock VM $vmid");
-+            PVE::QemuServer::unlock_vm($vmid);
-+        };
++        my $conf = PVE::QemuConfig->load_config($vmid);
++        delete $conf->{lock};
++        delete $conf->{pending}->{lock} if $conf->{pending};
++        PVE::QemuConfig->write_config($vmid, $conf);
 +
-+        return $rpcenv->fork_worker('qmunlock', $vmid, $authuser, $realcmd);
-+    }});
++        return undef;
++    },
++});
