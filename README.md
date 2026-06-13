@@ -78,13 +78,17 @@ Two playbooks are provided under `ansible/` to automate applying the patch and t
 
 ### Files
 
-- `ansible/inventory.ini` — example inventory; replace with your Proxmox host(s)
+- `ansible/inventory.ini.sample` — example inventory; copy to `inventory.ini` and edit
 - `ansible/apply_patch.yml` — backs up the file, verifies the patch can apply, applies it, restarts services
 - `ansible/test_api.yml` — logs in to the Proxmox API and calls the new unlock endpoint
 
 ### Inventory
 
-Edit `ansible/inventory.ini` and set your host:
+The real `ansible/inventory.ini` is git-ignored so your hosts/credentials stay local. Create it from the sample:
+
+    cp ansible/inventory.ini.sample ansible/inventory.ini
+
+Then edit it and set your host:
 
     [proxmox]
     pve1 ansible_host=1.2.3.4 ansible_user=root
