@@ -1,0 +1,19 @@
+---
+- name: Get cluster information
+  hosts: proxmox
+  gather_facts: false
+
+  tasks:
+
+    - name: Get cluster nodes
+      shell: pvecm nodes
+      register: cluster_nodes
+      ignore_errors: true
+
+    - name: Save output
+      delegate_to: localhost
+      copy:
+        content: |
+          {{ inventory_hostname }}
+          {{ cluster_nodes.stdout }}
+        dest: "./clusters/{{ inventory_hostname }}.txt"
