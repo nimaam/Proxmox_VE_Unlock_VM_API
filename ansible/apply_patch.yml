@@ -1,0 +1,90 @@
+---
+- name: Apply Proxmox VE Qemu.pm unlock patch
+  hosts: proxmox
+  become: true
+  gather_facts: false
+
+  vars:
+    target_file: /usr/share/perl5/PVE/API2/Qemu.pm
+    backup_file: "/usr/share/perl5/PVE/API2/Qemu.pm.backup-{{ ansible_date_time.iso8601_basic_short | default(lookup('pipe', 'date +%Y%m%dT%H%M%S')) }}"
+    patch_src: "{{ playbook_dir }}/../qemu-unlock.patch"
+    patch_dest: /tmp/qemu-unlock.patch
+
+  tasks:
+    - name: Check that the target file exists
+      ansible.builtin.stat:
+        path: "{{ target_file }}"
+      register: target_stat
+
+    - name: Fail if the target file is missing
+      ansible.builtin.fail:
+        msg: "Target file {{ target_file }} not found on {{ inventory_hostname }}"
+      when: not target_stat.stat.exists
+
+    - name: Copy patch to the remote host
+      ansible.builtin.copy:
+        src: "{{ patch_src }}"
+        dest: "{{ patch_dest }}"
+        mode: "0644"
+
+    - name: Check whether the patch is already applied (reverse dry-run)
+      ansible.builtin.command: >
+        patch -p1 --dry-run -R -s -i {{ patch_dest }} {{ target_file }}
+      register: reverse_dryrun
+      changed_when: false
+      failed_when: false
+
+    - name: Skip patching when already applied
+      ansible.builtin.debug:
+        msg: "Patch already applied on {{ inventory_hostname }} — nothing to do."
+      when: reverse_dryrun.rc == 0
+
+    - name: Dry-run the patch to verify it applies cleanly
+      ansible.builtin.command: >
+        patch -p1 --dry-run -s -i {{ patch_dest }} {{ target_file }}
+      register: forward_dryrun
+      changed_when: false
+      failed_when: false
+      when: reverse_dryrun.rc != 0
+
+    - name: Fail if the patch cannot be applied
+      ansible.builtin.fail:
+        msg: |
+          Patch dry-run failed on {{ inventory_hostname }}.
+          stdout: {{ forward_dryrun.stdout }}
+          stderr: {{ forward_dryrun.stderr }}
+      when:
+        - reverse_dryrun.rc != 0
+        - forward_dryrun.rc != 0
+
+    - name: Back up the target file
+      ansible.builtin.copy:
+        src: "{{ target_file }}"
+        dest: "{{ backup_file }}"
+        remote_src: true
+        mode: preserve
+      when: reverse_dryrun.rc != 0
+
+    - name: Apply the patch
+      ansible.builtin.command: >
+        patch -p1 -i {{ patch_dest }} {{ target_file }}
+      register: patch_apply
+      when: reverse_dryrun.rc != 0
+      changed_when: patch_apply.rc == 0
+
+    - name: Restart pvedaemon
+      ansible.builtin.systemd:
+        name: pvedaemon
+        state: restarted
+      when: reverse_dryrun.rc != 0
+
+    - name: Restart pveproxy
+      ansible.builtin.systemd:
+        name: pveproxy
+        state: restarted
+      when: reverse_dryrun.rc != 0
+
+    - name: Report backup location
+      ansible.builtin.debug:
+        msg: "Patch applied. Backup saved at {{ backup_file }}"
+      when: reverse_dryrun.rc != 0

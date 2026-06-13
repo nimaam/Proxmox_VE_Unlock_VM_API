@@ -1,0 +1,63 @@
+---
+- name: Test Proxmox VE custom unlock API
+  hosts: proxmox
+  gather_facts: false
+
+  vars:
+    pve_host: "{{ ansible_host }}"
+    pve_port: 8006
+    pve_user: "root@pam"
+    # Override on the command line: -e "pve_password=... vmid=..."
+    pve_password: ""
+    node: "{{ inventory_hostname }}"
+    vmid: ""
+    api_base: "https://{{ pve_host }}:{{ pve_port }}/api2/json"
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - pve_password | length > 0
+          - vmid | string | length > 0
+        fail_msg: "pve_password and vmid must be provided (e.g. -e 'pve_password=... vmid=144')."
+
+    - name: Log in to Proxmox and obtain ticket + CSRF token
+      ansible.builtin.uri:
+        url: "{{ api_base }}/access/ticket"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ pve_user }}"
+          password: "{{ pve_password }}"
+        validate_certs: false
+        return_content: true
+      register: login
+      delegate_to: localhost
+      no_log: true
+
+    - name: Fail if login did not return a ticket
+      ansible.builtin.fail:
+        msg: "Login failed — check credentials."
+      when: login.json.data.ticket is not defined
+
+    - name: Call the unlock endpoint
+      ansible.builtin.uri:
+        url: "{{ api_base }}/nodes/{{ node }}/qemu/{{ vmid }}/status/unlock"
+        method: POST
+        headers:
+          CSRFPreventionToken: "{{ login.json.data.CSRFPreventionToken }}"
+          Cookie: "PVEAuthCookie={{ login.json.data.ticket }}"
+        validate_certs: false
+        status_code: [200]
+        return_content: true
+      register: unlock
+      delegate_to: localhost
+
+    - name: Show unlock response
+      ansible.builtin.debug:
+        var: unlock.json
+
+    - name: Confirm success
+      ansible.builtin.debug:
+        msg: "VM {{ vmid }} unlocked successfully on node {{ node }}."
+      when: unlock.status == 200
